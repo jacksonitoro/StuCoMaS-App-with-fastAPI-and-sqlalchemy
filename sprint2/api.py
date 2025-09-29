@@ -25,7 +25,7 @@ def read_root():
 # --- Students ---
 @app.post("/students/", response_model=schemas.Student)
 def create_student(student: schemas.StudentCreate, db: Session = Depends(get_db)):
-    return crud.create_student(db, **student.dict())
+    return crud.create_student(db, **student.model_dump())
 
 @app.get("/students/", response_model=list[schemas.Student])
 def get_students(db: Session = Depends(get_db)):
@@ -43,7 +43,7 @@ def update_student(student_id: int, updated: schemas.StudentCreate, db: Session 
     student = db.query(models.Student).filter(models.Student.id == student_id).first()
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
-    for key, value in updated.dict().items():
+    for key, value in updated.model_dump().items():
         setattr(student, key, value)
     db.commit()
     db.refresh(student)
@@ -62,7 +62,7 @@ def delete_student(student_id: int, db: Session = Depends(get_db)):
 # --- Instructors ---
 @app.post("/instructors/", response_model=schemas.Instructor)
 def create_instructor(instructor: schemas.InstructorCreate, db: Session = Depends(get_db)):
-    return crud.create_instructor(db, **instructor.dict())
+    return crud.create_instructor(db, **instructor.model_dump())
 
 @app.get("/instructors/", response_model=list[schemas.Instructor])
 def get_instructors(db: Session = Depends(get_db)):
@@ -80,7 +80,7 @@ def update_instructor(instructor_id: int, updated: schemas.InstructorCreate, db:
     instructor = db.query(models.Instructor).filter(models.Instructor.id == instructor_id).first()
     if not instructor:
         raise HTTPException(status_code=404, detail="Instructor not found")
-    for key, value in updated.dict().items():
+    for key, value in updated.model_dump().items():
         setattr(instructor, key, value)
     db.commit()
     db.refresh(instructor)
@@ -99,7 +99,7 @@ def delete_instructor(instructor_id: int, db: Session = Depends(get_db)):
 # --- Courses ---
 @app.post("/courses/", response_model=schemas.Course)
 def create_course(course: schemas.CourseCreate, db: Session = Depends(get_db)):
-    return crud.create_course(db, **course.dict())
+    return crud.create_course(db, **course.model_dump())
 
 @app.get("/courses/", response_model=list[schemas.Course])
 def get_courses(db: Session = Depends(get_db)):
@@ -117,7 +117,7 @@ def update_course(course_id: int, updated: schemas.CourseCreate, db: Session = D
     course = db.query(models.Course).filter(models.Course.id == course_id).first()
     if not course:
         raise HTTPException(status_code=404, detail="Course not found")
-    for key, value in updated.dict().items():
+    for key, value in updated.model_dump().items():
         setattr(course, key, value)
     db.commit()
     db.refresh(course)
@@ -136,7 +136,8 @@ def delete_course(course_id: int, db: Session = Depends(get_db)):
 # --- Enrollments ---
 @app.post("/enrollments/", response_model=schemas.Enrollment)
 def enroll_student(enrollment: schemas.EnrollmentCreate, db: Session = Depends(get_db)):
-    return crud.enroll_student(db, **enrollment.dict())
+    return crud.enroll_student(db, **enrollment.model_dump())
+
 
 @app.get("/enrollments/", response_model=list[schemas.Enrollment])
 def get_enrollments(db: Session = Depends(get_db)):

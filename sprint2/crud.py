@@ -1,3 +1,4 @@
+from fastapi import HTTPException
 from sqlalchemy.orm import Session
 from sprint2.models import Student, Instructor, Course, Enrollment
 
@@ -56,9 +57,14 @@ def create_course(db: Session, code: str, title: str, credit_hours: int, instruc
 
 # --- Enrollments ---
 def enroll_student(db: Session, student_id: int, course_id: int):
-    existing = db.query(Enrollment).filter_by(student_id=student_id, course_id=course_id).first()
+    #Check if enrollment already exists
+    existing = (
+        db.query(Enrollment)
+        .filter(Enrollment.student_id == student_id, Enrollment.course_id == course_id)
+        .first()
+    )
     if existing:
-        return existing
+        raise HTTPException(status_code=400, detail="Student is already enrolled in this course")
 
     enrollment = Enrollment(student_id=student_id, course_id=course_id)
     db.add(enrollment)
