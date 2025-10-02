@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, conint
 from typing import Optional
 
 # --- Students ---
@@ -53,7 +53,7 @@ class Course(CourseBase):
 
 # --- Enrollments ---
 class EnrollmentBase(BaseModel):
-    grade: Optional[str] = None
+    grade: Optional[int] = None
 
 class EnrollmentCreate(EnrollmentBase):
     student_id: int
@@ -65,3 +65,8 @@ class Enrollment(EnrollmentBase):
 
     class Config:
         from_attributes = True
+
+
+# --- Grade Update ---
+class EnrollmentGradeUpdate(BaseModel):
+    grade: conint(ge=1, le=5)  # enforce 1 ≤ grade ≤ 5
