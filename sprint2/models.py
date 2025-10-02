@@ -1,5 +1,5 @@
 
-from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, Integer, String, ForeignKey, UniqueConstraint, CheckConstraint
 from sqlalchemy.orm import relationship
 from sprint2.database import Base
 
@@ -44,7 +44,11 @@ class Enrollment(Base):
 
     student_id = Column(Integer, ForeignKey("students.id"), primary_key=True)
     course_id = Column(Integer, ForeignKey("courses.id"), primary_key=True)
-    grade = Column(Integer, nullable=True)  # e.g., "1-5"
+    grade = Column(Integer, nullable=True)
+
+    __table_args__ = (
+        CheckConstraint("grade >= 1 AND grade <= 5", name="check_grade_range"),
+    )
 
     student = relationship("Student", back_populates="enrollments")
     course = relationship("Course", back_populates="enrollments")

@@ -53,7 +53,7 @@ class Course(CourseBase):
 
 # --- Enrollments ---
 class EnrollmentBase(BaseModel):
-    grade: Optional[int] = None
+    grade: Optional[conint(ge=1, le=5)] = None
 
 class EnrollmentCreate(EnrollmentBase):
     student_id: int

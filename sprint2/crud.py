@@ -113,7 +113,7 @@ def enroll_student(db: Session, student_id: int, course_id: int):
     db.refresh(enrollment)
     return enrollment
 
-def assign_grade(db: Session, student_id: int, course_id: int, grade: str):
+def assign_grade(db: Session, student_id: int, course_id: int, grade: int):
     enrollment = db.query(Enrollment).filter_by(student_id=student_id, course_id=course_id).first()
     if not enrollment:
         raise HTTPException(status_code=404, detail="Enrollment not found.")
