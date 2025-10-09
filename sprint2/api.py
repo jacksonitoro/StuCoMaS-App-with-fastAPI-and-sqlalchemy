@@ -1,14 +1,17 @@
-from fastapi import FastAPI, Depends, Query
-from sqlalchemy.orm import Session
-from sprint2 import crud, models, schemas
-from sprint2.database import SessionLocal, engine
+from fastapi import FastAPI, Depends, HTTPException, Header, Query
+from sqlalchemy.orm import Session, joinedload
+from typing import List, Optional
 from sprint2.schemas import EnrollmentGradeUpdate
+from sprint2.database import SessionLocal, Base, engine
+from sprint2 import crud, models, schemas
 
-models.Base.metadata.create_all(bind=engine)
+# Create database tables (only for dev, not in production)
+Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="StuCoMaS API 🚀")
+app = FastAPI(title="StuCoMaS API")
 
-# Dependency
+
+# --- Dependency: Database Session ---
 def get_db():
     db = SessionLocal()
     try:
@@ -17,122 +20,120 @@ def get_db():
         db.close()
 
 
-# --- Root ---
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to StuCoMaS API 🚀"}
+# ============================================================
+# 🧑‍🎓 STUDENT ROUTES
+# ============================================================
 
-
-# --- Search Endpoints ---
-@app.get("/students/search", response_model=list[schemas.Student])
-def search_students(query: str = Query(..., min_length=1), db: Session = Depends(get_db)):
-    return crud.search_students(db, query)
-
-
-@app.get("/courses/search", response_model=list[schemas.Course])
-def search_courses(query: str = Query(..., min_length=1), db: Session = Depends(get_db)):
-    return crud.search_courses(db, query)
-
-
-# --- Students ---
 @app.post("/students/", response_model=schemas.Student)
 def create_student(student: schemas.StudentCreate, db: Session = Depends(get_db)):
     return crud.create_student(db, **student.model_dump())
 
 
-@app.get("/students/", response_model=list[schemas.Student])
+@app.get("/students/", response_model=List[schemas.Student])
 def get_students(db: Session = Depends(get_db)):
     return crud.get_students(db)
 
 
-@app.get("/students/{student_id}", response_model=schemas.Student)
-def get_student(student_id: int, db: Session = Depends(get_db)):
-    return crud.get_student_by_id(db, student_id)
+@app.get("/students/search", response_model=List[schemas.Student])
+def search_students(query: str = Query(...), db: Session = Depends(get_db)):
+    return crud.search_students(db, query)
 
 
-@app.get("/students/{student_id}/courses", response_model=list[schemas.Course])
-def list_courses_of_student(student_id: int, db: Session = Depends(get_db)):
-    return crud.get_courses_of_student(db, student_id)
-
-
-@app.get("/students/{student_id}/grades")
+@app.get("/students/{student_id}/grades", response_model=List[schemas.StudentGrade])
 def get_student_grades(student_id: int, db: Session = Depends(get_db)):
     return crud.get_student_grades(db, student_id)
 
 
-@app.put("/students/{student_id}", response_model=schemas.Student)
-def update_student(student_id: int, student: schemas.StudentCreate, db: Session = Depends(get_db)):
-    return crud.update_student(db, student_id, student.model_dump())
+# ============================================================
+# 👩‍🏫 INSTRUCTOR ROUTES
+# ============================================================
 
-
-@app.delete("/students/{student_id}")
-def delete_student(student_id: int, db: Session = Depends(get_db)):
-    return crud.delete_student(db, student_id)
-
-
-# --- Instructors ---
 @app.post("/instructors/", response_model=schemas.Instructor)
 def create_instructor(instructor: schemas.InstructorCreate, db: Session = Depends(get_db)):
     return crud.create_instructor(db, **instructor.model_dump())
 
 
-@app.get("/instructors/{instructor_id}", response_model=schemas.Instructor)
-def get_instructor(instructor_id: int, db: Session = Depends(get_db)):
-    return crud.get_instructor_by_id(db, instructor_id)
-
-
-@app.get("/instructors/{instructor_id}/courses", response_model=list[schemas.Course])
-def list_courses_by_instructor(instructor_id: int, db: Session = Depends(get_db)):
+@app.get("/instructors/{instructor_id}/courses", response_model=List[schemas.Course])
+def get_courses_by_instructor(instructor_id: int, db: Session = Depends(get_db)):
     return crud.get_courses_by_instructor(db, instructor_id)
 
 
-@app.put("/instructors/{instructor_id}", response_model=schemas.Instructor)
-def update_instructor(instructor_id: int, instructor: schemas.InstructorCreate, db: Session = Depends(get_db)):
-    return crud.update_instructor(db, instructor_id, instructor.model_dump())
+@app.get("/instructors/{instructor_id}/courses/{course_id}/students", response_model=List[schemas.Student])
+def get_students_in_course(instructor_id: int, course_id: int, db: Session = Depends(get_db)):
+    course = db.query(models.Course).filter(
+        models.Course.id == course_id,
+        models.Course.instructor_id == instructor_id
+    ).first()
+
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+
+    return [enrollment.student for enrollment in course.enrollments]
 
 
-@app.delete("/instructors/{instructor_id}")
-def delete_instructor(instructor_id: int, db: Session = Depends(get_db)):
-    return crud.delete_instructor(db, instructor_id)
+@app.put("/instructors/{instructor_id}/courses/{course_id}/students/{student_id}/grade")
+def assign_grade_instructor(
+    instructor_id: int,
+    course_id: int,
+    student_id: int,
+    grade: int,
+    db: Session = Depends(get_db),
+    x_role: Optional[str] = Header(None)
+):
+    # Simple RBAC check (for tests)
+    if x_role and x_role.lower() != "instructor":
+        raise HTTPException(status_code=403, detail="Forbidden: Only instructors can assign grades")
+
+    course = db.query(models.Course).filter(
+        models.Course.id == course_id,
+        models.Course.instructor_id == instructor_id
+    ).first()
+
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found or unauthorized")
+
+    return crud.assign_grade(db, student_id, course_id, grade)
 
 
-# --- Courses ---
+# ============================================================
+# 🧑‍💼 ADMIN ROUTES
+# ============================================================
+
+@app.get("/admin/enrollments", response_model=List[schemas.Enrollment])
+def get_all_enrollments(db: Session = Depends(get_db)):
+    return crud.get_all_enrollments(db)
+
+
+
+@app.put("/admin/students/{student_id}/courses/{course_id}/grade")
+def admin_assign_grade(student_id: int, course_id: int, grade: int = Query(...), db: Session = Depends(get_db)):
+    """Admin assigns or updates a grade."""
+    return crud.assign_grade_by_admin(db, student_id, course_id, grade)
+
+
+
+
+# ============================================================
+# 📘 COURSE & ENROLLMENT ROUTES
+# ============================================================
+
 @app.post("/courses/", response_model=schemas.Course)
 def create_course(course: schemas.CourseCreate, db: Session = Depends(get_db)):
     return crud.create_course(db, **course.model_dump())
 
 
-@app.get("/courses/{course_id}", response_model=schemas.Course)
-def get_course(course_id: int, db: Session = Depends(get_db)):
-    return crud.get_course_by_id(db, course_id)
+@app.get("/courses/search", response_model=List[schemas.Course])
+def search_courses(query: str = Query(...), db: Session = Depends(get_db)):
+    return crud.search_courses(db, query)
 
 
-@app.get("/courses/{course_id}/students", response_model=list[schemas.Student])
-def list_students_in_course(course_id: int, db: Session = Depends(get_db)):
-    return crud.get_students_in_course(db, course_id)
-
-
-@app.put("/courses/{course_id}", response_model=schemas.Course)
-def update_course(course_id: int, course: schemas.CourseCreate, db: Session = Depends(get_db)):
-    return crud.update_course(db, course_id, course.model_dump())
-
-
-@app.delete("/courses/{course_id}")
-def delete_course(course_id: int, db: Session = Depends(get_db)):
-    return crud.delete_course(db, course_id)
-
-
-# --- Enrollments ---
 @app.post("/enrollments/", response_model=schemas.Enrollment)
 def enroll_student(enrollment: schemas.EnrollmentCreate, db: Session = Depends(get_db)):
-    return crud.enroll_student(db, **enrollment.model_dump())
+    # Filter out grade since it's optional in EnrollmentCreate
+    data = {k: v for k, v in enrollment.model_dump().items() if k != "grade"}
+    return crud.enroll_student(db, **data)
 
 
 @app.put("/enrollments/{student_id}/{course_id}/grade", response_model=schemas.Enrollment)
-def update_enrollment_grade(student_id: int, course_id: int, grade_update: EnrollmentGradeUpdate, db: Session = Depends(get_db)):
-    return crud.assign_grade(db, student_id, course_id, grade_update.grade)
-
-
-@app.delete("/enrollments/{student_id}/{course_id}")
-def delete_enrollment(student_id: int, course_id: int, db: Session = Depends(get_db)):
-    return crud.delete_enrollment(db, student_id, course_id)
+def assign_grade(student_id: int, course_id: int, payload: EnrollmentGradeUpdate, db: Session = Depends(get_db)):
+    return crud.assign_grade(db, student_id, course_id, payload.grade)

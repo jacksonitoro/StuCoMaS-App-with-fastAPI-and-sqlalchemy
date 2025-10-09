@@ -1,4 +1,3 @@
-# conftest.py
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -6,10 +5,13 @@ from sqlalchemy.orm import sessionmaker
 from sprint2.database import Base
 from sprint2.api import app, get_db
 
-# --- Use a shared in-memory SQLite database ---
+# ============================================================
+# 🧩 Test Database Setup (shared in-memory)
+# ============================================================
+
 SQLALCHEMY_DATABASE_URL = "sqlite:///file:memdb1?mode=memory&cache=shared"
 
-# Create a shared engine (important!)
+# ✅ Shared engine for consistent memory state
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False, "uri": True}
@@ -17,11 +19,12 @@ engine = create_engine(
 
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-# Create all tables once in the shared memory DB
-Base.metadata.create_all(bind=engine)
+# ============================================================
+# 🧩 Override the main app DB dependency
+# ============================================================
 
-# --- Dependency override to use test DB ---
 def override_get_db():
+    """Provide a fresh database session for each test."""
     db = TestingSessionLocal()
     try:
         yield db
@@ -30,19 +33,28 @@ def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_test_db():
+
+# ============================================================
+# 🧹 Fixtures for Test Isolation
+# ============================================================
+
+@pytest.fixture(scope="function", autouse=True)
+def clean_test_db():
+    """
+    Automatically runs before each test.
+    Drops and recreates all tables for total isolation.
+    """
+    Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
     yield
     Base.metadata.drop_all(bind=engine)
 
 
-
-# --- Test client fixture ---
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="function")
 def client():
-    # Recreate all tables before each test for isolation
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    """
+    Provides a new FastAPI TestClient for each test,
+    ensuring DB and app state are clean.
+    """
     with TestClient(app) as c:
         yield c

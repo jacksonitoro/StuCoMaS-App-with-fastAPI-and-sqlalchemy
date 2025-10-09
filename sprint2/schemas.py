@@ -1,72 +1,111 @@
-from pydantic import BaseModel, EmailStr, conint
-from typing import Optional
+from pydantic import BaseModel, EmailStr, conint, ConfigDict
+from typing import Optional, List
 
-# --- Students ---
+
+# ============================================================
+# 🎓 STUDENTS
+# ============================================================
+
 class StudentBase(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
 
+
 class StudentCreate(StudentBase):
     pass
 
+
 class Student(StudentBase):
     id: int
-
-    class Config:
-        from_attributes = True  # Pydantic v2 replacement for orm_mode
+    model_config = ConfigDict(from_attributes=True)
 
 
-# --- Instructors ---
+# ============================================================
+# 👩‍🏫 INSTRUCTORS
+# ============================================================
+
 class InstructorBase(BaseModel):
     first_name: str
     last_name: str
     email: EmailStr
     department: Optional[str] = None
 
+
 class InstructorCreate(InstructorBase):
     pass
 
+
 class Instructor(InstructorBase):
     id: int
-
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
-# --- Courses ---
+# ============================================================
+# 📘 COURSES
+# ============================================================
+
 class CourseBase(BaseModel):
     code: str
     title: str
     credits: int
 
+
 class CourseCreate(CourseBase):
     instructor_id: int
 
+
 class Course(CourseBase):
     id: int
-    instructor: Instructor  # nested Instructor
-
-    class Config:
-        from_attributes = True
+    instructor: Optional[Instructor] = None
+    model_config = ConfigDict(from_attributes=True)
 
 
-# --- Enrollments ---
+# ============================================================
+# 🧾 ENROLLMENTS
+# ============================================================
+
 class EnrollmentBase(BaseModel):
     grade: Optional[conint(ge=1, le=5)] = None
+
 
 class EnrollmentCreate(EnrollmentBase):
     student_id: int
     course_id: int
 
+
 class Enrollment(EnrollmentBase):
-    student: Student  # nested Student
-    course: Course    # nested Course
-
-    class Config:
-        from_attributes = True
+    student: Optional[Student] = None
+    course: Optional[Course] = None
+    model_config = ConfigDict(from_attributes=True)
 
 
-# --- Grade Update ---
+# ============================================================
+# 🔢 GRADE UPDATE
+# ============================================================
+
 class EnrollmentGradeUpdate(BaseModel):
-    grade: conint(ge=1, le=5)  # enforce 1 ≤ grade ≤ 5
+    grade: conint(ge=1, le=5)
+
+
+# ============================================================
+# 📊 DASHBOARD RESPONSES
+# ============================================================
+
+class StudentWithGrades(Student):
+    grades: List[Enrollment] = []
+
+
+class CourseWithStudents(Course):
+    students: List[Student] = []
+
+
+# ============================================================
+# 🧠 NEW: STUDENT GRADE SCHEMA
+# ============================================================
+
+class StudentGrade(BaseModel):
+    course: str
+    grade: Optional[int]
+
+    model_config = ConfigDict(from_attributes=True)
